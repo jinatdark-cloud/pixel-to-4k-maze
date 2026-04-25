@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Maze Demo</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const TILE = 40;
+const MINIMAP_W = 260;
+
+const COLORS = {
+  bg: "#000000",
+  grid: "#383838",
+  wall: "#0f0f0f",
+  floor: "#000000",
+  playerBody: "#f2c94c",
+  playerHead: "#ff8a3d",
+  key: "#ffd54a",
+  keyDark: "#b8860b",
+  doorClosed: "#7b4f28",
+  doorOpen: "#2ecc71",
+  exitGlow: "#7CFC00",
+  hudBg: "rgba(0,0,0,0.55)",
+  hudBorder: "#4a4a4a",
+  text: "#e8e8e8",
+  textDim: "#bdbdbd",
+  minimapBg: "#050505",
+  minimapBorder: "#3c3c3c",
+  minimapWall: "#202020",
+  minimapFloor: "#0a0a0a",
+  minimapPlayer: "#ff8a3d",
+  minimapKey: "#ffd54a",
+  minimapDoor: "#44dd88"
+};
+
+const DIRS = {
+  up:    { x: 0,  y: -1 },
+  down:  { x: 0,  y: 1 },
+  left:  { x: -1, y: 0 },
+  right: { x: 1,  y: 0 }
+};
+
+let state = null;
+
+function makeOdd(n) {
+  return n % 2 === 0 ? n + 1 : n;
+}
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  if (!state) initGame();
+  draw();
+}
+
+function initGame() {
+  const mainW = canvas.width - MINIMAP_W;
+  const visibleCols = Math.max(15, Math.floor(mainW / TILE));
+  const visibleRows = Math.max(11, Math.floor(canvas.height / TILE));
+
+  // ~4x visible area
+  const mazeCols = makeOdd(visibleCols * 2 + 1);
+  const mazeRows = makeOdd(visibleRows * 2 + 1);
+
+  state = createMazeState(mazeCols, mazeRows, visibleCols, visibleRows);
+}
+
+function restartSameMaze() {
+  if (!state) return;
+  state.player.x = state.start.x;
+  state.player.y = state.start.y;
+  state.player.dir = "up";
+  state.hasKey = false;
+  state.won = false;
+  state.message = "找到钥匙，打开出口门";
+  state.door.open = false;
+}
+
+function createMazeState(cols, rows, visibleCols, visibleRows) {
+  const maze = generateMaze(cols, rows);
+
+  const start = { x: 1, y: 1 };
+  const keyPos = farthestFloorFrom(maze, start.x, start.y);
+
+  // Pick a floor adjacent to border, farthest from key
+  const boundaryCandidate = farthestBoundaryAdjacentFloorFrom(maze, keyPos.x, keyPos.y);
+  const door = buildDoorAtBorder(maze, boundaryCandidate.x, boundaryCandidate.y);
+
+  return {
+    cols,
+    rows,
+    visibleCols,
+    visibleRows,
+    maze,
+    start,
+    key: { x: keyPos.x, y: keyPos.y, collected: false },
+    door: { x: door.x, y: door.y, side: door.side, open: false },
+    player: { x: start.x, y: start.y, dir: "up" },
+    hasKey: false,
+    won: false,
+    message: "找到钥匙，打开出口门"
+  };
+}
+
+function generateMaze(cols, rows) {
+  // 1 = wall, 0 = floor
+  const grid = Array.from({ length: rows }, () => Array(cols).fill(1));
+
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0;
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function carve(cx, cy) {
+    grid[cy][cx] = 0;
+    const dirs = shuffle([
+      { x: 0, y: -2 },
+      { x: 0, y: 2 },
+      { x: -2, y: 0 },
+      { x: 2, y: 0 }
+    ]);
+
+    for (const d of dirs) {
+      const nx = cx + d.x;
+      const ny = cy + d.y;
+      if (nx <= 0 || ny <= 0 || nx >= cols - 1 || ny >= rows - 1) continue;
+      if (grid[ny][nx] === 1) {
+        grid[cy + d.y / 2][cx + d.x / 2] = 0;
+        carve(nx, ny);
+      }
+    }
+  }
+
+  carve(1, 1);
+  return grid;
+}
+
+function bfsDistances(maze, sx, sy) {
+  const rows = maze.length;
+  const cols = maze[0].length;
+  const dist = Array.from({ length: rows }, () => Array(cols).fill(-1));
+  const queue = [{ x: sx, y: sy }];
+  dist[sy][sx] = 0;
+
+  for (let head = 0; head < queue.length; head++) {
+    const cur = queue[head];
+    for (const d of Object.values(DIRS)) {
+      const nx = cur.x + d.x;
+      const ny = cur.y + d.y;
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+      if (maze[ny][nx] !== 0 || dist[ny][nx] !== -1) continue;
+      dist[ny][nx] = dist[cur.y][cur.x] + 1;
+      queue.push({ x: nx, y: ny });
+    }
+  }
+  return dist;
+}
+
+function farthestFloorFrom(maze, sx, sy) {
+  const dist = bfsDistances(maze, sx, sy);
+  let best = { x: sx, y: sy, d: -1 };
+
+  for (let y = 0; y < maze.length; y++) {
+    for (let x = 0; x < maze[0].length; x++) {
+      if (maze[y][x] === 0 && dist[y][x] > best.d) {
+        best = { x, y, d: dist[y][x] };
+      }
+    }
+  }
+  return { x: best.x, y: best.y };
+}
+
+function farthestBoundaryAdjacentFloorFrom(maze, sx, sy) {
+  const dist = bfsDistances(maze, sx, sy);
+  let best = null;
+
+  for (let y = 1; y < maze.length - 1; y++) {
+    for (let x = 1; x < maze[0].length - 1; x++) {
+      if (maze[y][x] !== 0) continue;
+      const adjacentToBorder = (x === 1 || x === maze[0].length - 2 || y === 1 || y === maze.length - 2);
+      if (!adjacentToBorder) continue;
+      if (!best || dist[y][x] > best.d) {
+        best = { x, y, d: dist[y][x] };
+      }
+    }
+  }
+
+  return best ? { x: best.x, y: best.y } : { x: maze[0].length - 2, y: maze.length - 2 };
+}
+
+function buildDoorAtBorder(maze, x, y) {
+  // Door exists on border tile just outside the maze floor
+  if (x === 1) {
+    return { x: 0, y, side: "left" };
+  }
+  if (x === maze[0].length - 2) {
+    return { x: maze[0].length - 1, y, side: "right" };
+  }
+  if (y === 1) {
+    return { x, y: 0, side: "top" };
+  }
+  return { x, y: maze.length - 1, side: "bottom" };
+}
+
+function isWalkable(x, y) {
+  if (x < 0 || y < 0 || x >= state.cols || y >= state.rows) return false;
+  if (x === state.door.x && y === state.door.y) return false;
+  return state.maze[y][x] === 0;
+}
+
+function tryMove(dir) {
+  if (state.won) return;
+
+  state.player.dir = dir;
+
+  const d = DIRS[dir];
+  const nx = state.player.x + d.x;
+  const ny = state.player.y + d.y;
+
+  // Door logic
+  if (nx === state.door.x && ny === state.door.y) {
+    if (state.hasKey) {
+      state.door.open = true;
+      state.player.x = nx;
+      state.player.y = ny;
+      state.won = true;
+      state.message = "关卡通过";
+    } else {
+      state.message = "先拿钥匙";
+    }
+    draw();
+    return;
+  }
+
+  if (!isWalkable(nx, ny)) {
+    draw();
+    return;
+  }
+
+  state.player.x = nx;
+  state.player.y = ny;
+
+  // Auto pickup key
+  if (!state.key.collected && nx === state.key.x && ny === state.key.y) {
+    state.key.collected = true;
+    state.hasKey = true;
+    state.message = "已拾取钥匙，去开门";
+  }
+
+  draw();
+}
+
+function drawGridRegion(offsetX, offsetY, cols, rows, tileSize) {
+  ctx.strokeStyle = COLORS.grid;
+  ctx.lineWidth = 1;
+
+  for (let x = 0; x <= cols; x++) {
+    const px = offsetX + x * tileSize + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(px, offsetY);
+    ctx.lineTo(px, offsetY + rows * tileSize);
+    ctx.stroke();
+  }
+
+  for (let y = 0; y <= rows; y++) {
+    const py = offsetY + y * tileSize + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(offsetX, py);
+    ctx.lineTo(offsetX + cols * tileSize, py);
+    ctx.stroke();
+  }
+}
+
+function getCamera() {
+  const mainW = canvas.width - MINIMAP_W;
+  const maxCamX = Math.max(0, state.cols * TILE - mainW);
+  const maxCamY = Math.max(0, state.rows * TILE - canvas.height);
+
+  let camX = state.player.x * TILE + TILE / 2 - mainW / 2;
+  let camY = state.player.y * TILE + TILE / 2 - canvas.height / 2;
+
+  camX = Math.max(0, Math.min(maxCamX, camX));
+  camY = Math.max(0, Math.min(maxCamY, camY));
+
+  return { camX, camY, mainW };
+}
+
+function drawMazeMain() {
+  const { camX, camY, mainW } = getCamera();
+
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, mainW, canvas.height);
+
+  // draw floor/walls
+  const startCol = Math.max(0, Math.floor(camX / TILE) - 1);
+  const endCol = Math.min(state.cols - 1, Math.floor((camX + mainW) / TILE) + 1);
+  const startRow = Math.max(0, Math.floor(camY / TILE) - 1);
+  const endRow = Math.min(state.rows - 1, Math.floor((camY + canvas.height) / TILE) + 1);
+
+  for (let y = startRow; y <= endRow; y++) {
+    for (let x = startCol; x <= endCol; x++) {
+      const sx = x * TILE - camX;
+      const sy = y * TILE - camY;
+
+      // tile background
+      if (state.maze[y][x] === 1) {
+        ctx.fillStyle = COLORS.wall;
+        ctx.fillRect(sx, sy, TILE, TILE);
+      } else {
+        ctx.fillStyle = COLORS.floor;
+        ctx.fillRect(sx, sy, TILE, TILE);
+      }
+
+      // grid border
+      ctx.strokeStyle = COLORS.grid;
+      ctx.strokeRect(sx + 0.5, sy + 0.5, TILE, TILE);
+    }
+  }
+
+  // door
+  drawDoor(state.door.x * TILE - camX, state.door.y * TILE - camY, TILE, state.door.open);
+
+  // key
+  if (!state.key.collected) {
+    drawKey(state.key.x * TILE - camX, state.key.y * TILE - camY, TILE);
+  }
+
+  // player
+  drawPlayerSprite(state.player.x * TILE - camX, state.player.y * TILE - camY, TILE, state.player.dir);
+}
+
+function drawPlayerSprite(px, py, size, dir) {
+  const block = Math.floor(size * 0.22);
+  const gap = Math.floor(size * 0.03);
+  const totalW = block * 3 + gap * 2;
+  const totalH = block * 3 + gap * 2;
+
+  const ox = px + Math.floor((size - totalW) / 2);
+  const oy = py + Math.floor((size - totalH) / 2);
+
+  let cells;
+  switch (dir) {
+    case "up":
+      cells = [
+        { x: 1, y: 0, head: true },
+        { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 },
+        { x: 0, y: 2 }, { x: 1, y: 2 }, { x: 2, y: 2 }
+      ];
+      break;
+    case "down":
+      cells = [
+        { x: 1, y: 2, head: true },
+        { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 },
+        { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }
+      ];
+      break;
+    case "left":
+      cells = [
+        { x: 0, y: 1, head: true },
+        { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 },
+        { x: 2, y: 0 }, { x: 2, y: 1 }, { x: 2, y: 2 }
+      ];
+      break;
+    case "right":
+      cells = [
+        { x: 2, y: 1, head: true },
+        { x: 0, y: 0 }, { x: 0, y: 1 }, { x: 0, y: 2 },
+        { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }
+      ];
+      break;
+  }
+
+  for (const c of cells) {
+    const x = ox + c.x * (block + gap);
+    const y = oy + c.y * (block + gap);
+
+    ctx.fillStyle = "#1a1a1a";
+    ctx.fillRect(x, y, block, block);
+
+    ctx.fillStyle = c.head ? COLORS.playerHead : COLORS.playerBody;
+    ctx.fillRect(x + 2, y + 2, block - 4, block - 4);
+  }
+}
+
+function drawKey(px, py, size) {
+  const sx = px + Math.floor(size * 0.25);
+  const sy = py + Math.floor(size * 0.2);
+  const w = Math.floor(size * 0.5);
+  const h = Math.floor(size * 0.6);
+
+  ctx.fillStyle = COLORS.key;
+  // ring
+  ctx.fillRect(sx + 6, sy, 10, 4);
+  ctx.fillRect(sx + 4, sy + 4, 4, 10);
+  ctx.fillRect(sx + 16, sy + 4, 4, 10);
+  ctx.fillRect(sx + 6, sy + 14, 10, 4);
+
+  // stem
+  ctx.fillRect(sx + 10, sy + 18, 4, 12);
+
+  // teeth
+  ctx.fillRect(sx + 14, sy + 24, 8, 4);
+  ctx.fillRect(sx + 18, sy + 20, 4, 4);
+
+  ctx.fillStyle = COLORS.keyDark;
+  ctx.fillRect(sx + 10, sy + 18, 2, 12);
+}
+
+function drawDoor(px, py, size, open) {
+  ctx.fillStyle = open ? COLORS.doorOpen : COLORS.doorClosed;
+  ctx.fillRect(px + 4, py + 4, size - 8, size - 8);
+
+  ctx.fillStyle = open ? "#0a3518" : "#2f1d10";
+  ctx.fillRect(px + Math.floor(size * 0.32), py + Math.floor(size * 0.4), Math.floor(size * 0.36), Math.floor(size * 0.48));
+
+  if (open) {
+    ctx.strokeStyle = COLORS.exitGlow;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 3, py + 3, size - 6, size - 6);
+  }
+}
+
+function drawHUD() {
+  const { mainW } = getCamera();
+
+  ctx.fillStyle = COLORS.hudBg;
+  ctx.fillRect(12, 12, 300, 96);
+  ctx.strokeStyle = COLORS.hudBorder;
+  ctx.strokeRect(12.5, 12.5, 300, 96);
+
+  ctx.fillStyle = COLORS.text;
+  ctx.font = "16px Arial, Microsoft YaHei";
+  ctx.fillText("方向键 移动", 24, 38);
+  ctx.fillText("R 重开   N 新迷宫", 24, 62);
+
+  const keyText = state.hasKey ? "已获得" : "未获得";
+  ctx.fillText("钥匙: " + keyText, 24, 86);
+
+  ctx.fillStyle = state.won ? "#7CFC00" : COLORS.textDim;
+  ctx.fillText(state.message, 24, 106);
+
+  // divider
+  ctx.strokeStyle = COLORS.minimapBorder;
+  ctx.beginPath();
+  ctx.moveTo(mainW + 0.5, 0);
+  ctx.lineTo(mainW + 0.5, canvas.height);
+  ctx.stroke();
+}
+
+function drawMinimap() {
+  const { mainW } = getCamera();
+
+  ctx.fillStyle = COLORS.minimapBg;
+  ctx.fillRect(mainW, 0, MINIMAP_W, canvas.height);
+
+  const pad = 14;
+  const mapAreaW = MINIMAP_W - pad * 2;
+  const mapAreaH = canvas.height - pad * 2 - 50;
+
+  const scale = Math.min(
+    mapAreaW / state.cols,
+    mapAreaH / state.rows
+  );
+
+  const mapW = state.cols * scale;
+  const mapH = state.rows * scale;
+  const ox = mainW + pad + (mapAreaW - mapW) / 2;
+  const oy = pad + 40;
+
+  ctx.fillStyle = COLORS.text;
+  ctx.font = "16px Arial, Microsoft YaHei";
+  ctx.fillText("Mini Map", mainW + 18, 28);
+
+  for (let y = 0; y < state.rows; y++) {
+    for (let x = 0; x < state.cols; x++) {
+      ctx.fillStyle = state.maze[y][x] === 1 ? COLORS.minimapWall : COLORS.minimapFloor;
+      ctx.fillRect(ox + x * scale, oy + y * scale, Math.ceil(scale), Math.ceil(scale));
+    }
+  }
+
+  // key
+  if (!state.key.collected) {
+    ctx.fillStyle = COLORS.minimapKey;
+    ctx.fillRect(ox + state.key.x * scale, oy + state.key.y * scale, Math.ceil(scale), Math.ceil(scale));
+  }
+
+  // door
+  ctx.fillStyle = state.door.open ? COLORS.doorOpen : COLORS.doorClosed;
+  ctx.fillRect(ox + state.door.x * scale, oy + state.door.y * scale, Math.ceil(scale), Math.ceil(scale));
+
+  // player
+  ctx.fillStyle = COLORS.minimapPlayer;
+  ctx.fillRect(ox + state.player.x * scale, oy + state.player.y * scale, Math.ceil(scale), Math.ceil(scale));
+
+  ctx.strokeStyle = COLORS.minimapBorder;
+  ctx.strokeRect(ox - 1, oy - 1, mapW + 2, mapH + 2);
+}
+
+function drawWinOverlay() {
+  if (!state.won) return;
+
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const w = 360, h = 140;
+  const x = (canvas.width - w) / 2;
+  const y = (canvas.height - h) / 2;
+
+  ctx.fillStyle = "#111";
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = "#5a5a5a";
+  ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+
+  ctx.fillStyle = "#7CFC00";
+  ctx.font = "28px Arial, Microsoft YaHei";
+  ctx.fillText("关卡通过", x + 110, y + 52);
+
+  ctx.fillStyle = COLORS.text;
+  ctx.font = "16px Arial, Microsoft YaHei";
+  ctx.fillText("R 重开当前迷宫", x + 108, y + 90);
+  ctx.fillText("N 生成新迷宫", x + 112, y + 116);
+}
+
+function draw() {
+  if (!state) return;
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  drawMazeMain();
+  drawHUD();
+  drawMinimap();
+  drawWinOverlay();
+}
+
+window.addEventListener("keydown", (e) => {
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "r", "R", "n", "N"].includes(e.key)) {
+    e.preventDefault();
+  }
+
+  switch (e.key) {
+    case "ArrowUp": tryMove("up"); break;
+    case "ArrowDown": tryMove("down"); break;
+    case "ArrowLeft": tryMove("left"); break;
+    case "ArrowRight": tryMove("right"); break;
+    case "r":
+    case "R":
+      restartSameMaze();
+      draw();
+      break;
+    case "n":
+    case "N":
+      initGame();
+      draw();
+      break;
+  }
+});
+
+window.addEventListener("resize", () => {
+  resize();
+});
+
+resize();
+</script>
+</body>
+</html>
