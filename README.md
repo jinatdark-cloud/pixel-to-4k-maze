@@ -103,6 +103,7 @@ Project documentation will be expanded step by step.
 - `docs/core-loop.md` — gameplay loop and design logic
 - `docs/factions-and-roles.md` — factions, roles, and social structure
 - `docs/roadmap.md` — development roadmap
+- `demo/pixel-maze-demo.html` — standalone browser demo (canvas-based maze prototype)
 
 ---
 
