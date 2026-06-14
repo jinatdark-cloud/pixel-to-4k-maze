@@ -1,0 +1,83 @@
+{
+  "schema_version": "0.1",
+  "project": "Maze: Pixel to 4K",
+  "batch": "first_modular_asset_batch",
+  "tile_size": 40,
+  "global_style": "pixel-first dark fantasy dungeon, top-down, modular, restrained palette, reusable before unique",
+  "families": {
+    "walls": [
+      {"id":"wall_stone_01","priority":"P1","role":"common corridor wall"},
+      {"id":"wall_stone_02","priority":"P1","role":"stone wall variant"},
+      {"id":"wall_brick_01","priority":"P1","role":"formal dungeon wall"},
+      {"id":"wall_brick_02","priority":"P1","role":"brick wall variant"},
+      {"id":"wall_ruin_01","priority":"P1","role":"ancient ruin wall"},
+      {"id":"wall_ruin_02","priority":"P1","role":"ruin wall variant"},
+      {"id":"wall_dungeon_01","priority":"P1","role":"deep dungeon wall"},
+      {"id":"wall_dungeon_02","priority":"P1","role":"deep wall variant"}
+    ],
+    "floors": [
+      {"id":"floor_stone_01","priority":"P1","role":"default walkable floor"},
+      {"id":"floor_stone_02","priority":"P1","role":"stone floor variant"},
+      {"id":"floor_dirt_01","priority":"P1","role":"fringe dirt floor"},
+      {"id":"floor_dirt_02","priority":"P1","role":"dirt floor variant"},
+      {"id":"floor_moss_01","priority":"P1","role":"old damp sector floor"},
+      {"id":"floor_moss_02","priority":"P1","role":"moss floor variant"}
+    ],
+    "corners": [
+      {"id":"corner_inner_01","priority":"P1","role":"inner wall corner"},
+      {"id":"corner_inner_02","priority":"P1","role":"inner corner variant"},
+      {"id":"corner_outer_01","priority":"P1","role":"outer wall corner"},
+      {"id":"corner_outer_02","priority":"P1","role":"outer corner variant"}
+    ],
+    "doors": [
+      {"id":"door_wood_01","priority":"P1","role":"basic locked door"},
+      {"id":"door_iron_01","priority":"P1","role":"strong locked door"},
+      {"id":"door_magic_01","priority":"P1","role":"Access Tier or Weave-locked door"}
+    ],
+    "pillars": [
+      {"id":"pillar_round_01","priority":"P2","role":"room support and obstacle"},
+      {"id":"pillar_square_01","priority":"P2","role":"square room support"},
+      {"id":"pillar_ruined_01","priority":"P2","role":"ruined obstacle"},
+      {"id":"pillar_small_01","priority":"P2","role":"boundary marker"}
+    ],
+    "lights": [
+      {"id":"torch_01","priority":"P2","role":"basic light source"},
+      {"id":"torch_02","priority":"P2","role":"torch variant"},
+      {"id":"brazier_01","priority":"P2","role":"floor light source"},
+      {"id":"crystal_light_01","priority":"P2","role":"Weave-lit marker"},
+      {"id":"candle_cluster_01","priority":"P2","role":"altar or archive lighting"}
+    ],
+    "mechanisms": [
+      {"id":"lever_01","priority":"P1","role":"toggle door or trap"},
+      {"id":"pressure_plate_01","priority":"P1","role":"floor trigger"},
+      {"id":"pressure_plate_02","priority":"P1","role":"trigger variant"},
+      {"id":"spike_trap_01","priority":"P1","role":"floor hazard"},
+      {"id":"dart_trap_01","priority":"P2","role":"wall hazard"},
+      {"id":"portal_01","priority":"P2","role":"teleport or extraction gate"},
+      {"id":"altar_01","priority":"P2","role":"synthesis or relic interaction"}
+    ],
+    "treasures": [
+      {"id":"key_bronze","priority":"P1","role":"basic door unlock"},
+      {"id":"key_silver","priority":"P1","role":"higher door unlock"},
+      {"id":"key_gold","priority":"P1","role":"rare door unlock"},
+      {"id":"chest_small","priority":"P1","role":"minor reward container"},
+      {"id":"chest_large","priority":"P2","role":"major reward container"},
+      {"id":"gem_blue","priority":"P1","role":"Weave component"},
+      {"id":"gem_red","priority":"P2","role":"rare component"},
+      {"id":"ancient_scroll","priority":"P2","role":"lore clue or recipe fragment"}
+    ],
+    "monsters": [
+      {"id":"monster_rat","priority":"P2","role":"low-tier swarm enemy"},
+      {"id":"monster_bat","priority":"P2","role":"low-tier flying enemy"},
+      {"id":"monster_skeleton","priority":"P2","role":"baseline melee enemy"},
+      {"id":"monster_goblin","priority":"P2","role":"basic intelligent enemy"},
+      {"id":"monster_orc","priority":"P2","role":"mid-tier melee guard"},
+      {"id":"monster_spider","priority":"P2","role":"ambush enemy"}
+    ],
+    "bosses": [
+      {"id":"boss_minotaur","priority":"P3","role":"maze guardian boss","footprint":"2x2"},
+      {"id":"boss_lich","priority":"P3","role":"knowledge archive boss","footprint":"2x2"},
+      {"id":"boss_dragon","priority":"P3","role":"late-tier threshold boss","footprint":"3x3"}
+    ]
+  }
+}

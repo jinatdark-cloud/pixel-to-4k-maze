@@ -103,6 +103,10 @@ Project documentation will be expanded step by step.
 - `docs/core-loop.md` — gameplay loop and design logic
 - `docs/factions-and-roles.md` — factions, roles, and social structure
 - `docs/roadmap.md` — development roadmap
+- `docs/visual-style-references.md` — classic maze/dungeon reference lessons for visual direction
+- `docs/asset-bible.md` — first modular dungeon asset system and AI production rules
+- `docs/dungeon-tile-rules.md` — reusable tile grammar and room construction rules
+- `data/assets.json` — first-batch asset registry for 54 reusable tiles, props, monsters, and bosses
 - `demo/pixel-maze-demo.html` — standalone browser demo (canvas-based maze prototype)
 
 ---
@@ -116,6 +120,7 @@ The current focus is:
 - establishing the core gameplay loop
 - planning the first playable demo
 - building a clean project structure for future development
+- establishing a reusable asset system before large-scale AI image generation
 
 ---
 
